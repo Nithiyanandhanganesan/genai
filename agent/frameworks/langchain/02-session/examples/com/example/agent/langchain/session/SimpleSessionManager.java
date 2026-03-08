@@ -2,16 +2,15 @@
  * Session Management Examples - Simple In-Memory Implementation
  * Java implementation using LangChain4j framework
  */
-package com.example.agent.session;
+package com.example.agent.langchain.session;
 
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.example.agent.langchain.basics.ConfigurationUtil;
 import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.service.AiServices;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -40,7 +39,11 @@ class SessionData {
         this.sessionActive = true;
     }
 
-    // Getters and setters
+    public void incrementTotalMessages() {
+        this.totalMessages++;
+    }
+
+    // Explicit getters/setters to ensure compatibility if Lombok has issues
     public String getSessionId() { return sessionId; }
     public String getUserId() { return userId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -49,7 +52,6 @@ class SessionData {
     public MessageWindowChatMemory getMemory() { return memory; }
     public ChatLanguageModel getModel() { return model; }
     public int getTotalMessages() { return totalMessages; }
-    public void incrementTotalMessages() { this.totalMessages++; }
     public boolean isSessionActive() { return sessionActive; }
     public void setSessionActive(boolean sessionActive) { this.sessionActive = sessionActive; }
 }
@@ -140,7 +142,19 @@ public class SimpleSessionManager {
         for (ChatMessage msg : messages) {
             Map<String, Object> messageData = new HashMap<>();
             messageData.put("type", msg.type().toString());
-            messageData.put("content", msg.text());
+
+            // Handle different message types and extract content safely
+            String content;
+            if (msg instanceof UserMessage) {
+                content = ((UserMessage) msg).singleText();
+            } else if (msg instanceof AiMessage) {
+                content = ((AiMessage) msg).text();
+            } else {
+                // Fallback for other message types
+                content = msg.toString();
+            }
+
+            messageData.put("content", content);
             messageData.put("timestamp", LocalDateTime.now()); // In real implementation, store actual timestamp
             history.add(messageData);
         }
@@ -148,16 +162,6 @@ public class SimpleSessionManager {
         return history;
     }
 
-    /**
-     * End a session and clean up resources
-     */
-    public void endSession(String sessionId) {
-        Optional<SessionData> sessionOpt = getSession(sessionId);
-        if (sessionOpt.isPresent()) {
-            sessionOpt.get().setSessionActive(false);
-            System.out.println("Session " + sessionId + " ended");
-        }
-    }
 
     /**
      * List all active sessions
@@ -179,16 +183,6 @@ public class SimpleSessionManager {
         return activeSessions;
     }
 
-    /**
-     * Clean up expired sessions
-     */
-    public void cleanupExpiredSessions(int hoursToExpire) {
-        LocalDateTime expireTime = LocalDateTime.now().minusHours(hoursToExpire);
-
-        sessions.entrySet().removeIf(entry ->
-            entry.getValue().getLastAccessed().isBefore(expireTime)
-        );
-    }
 }
 
 /**
@@ -197,15 +191,19 @@ public class SimpleSessionManager {
 class SessionExample {
 
     public static void main(String[] args) {
-        // Initialize ChatModel (you'll need to set your API key)
-        ChatLanguageModel chatModel = OpenAiChatModel.builder()
-                .apiKey("your-openai-api-key-here")
-                .modelName("gpt-3.5-turbo")
-                .temperature(0.7)
-                .build();
+        // Check if API key is available
+        if (!ConfigurationUtil.isApiKeyAvailable()) {
+            ConfigurationUtil.printApiKeyInstructions();
+            return;
+        }
 
-        // Create session manager
-        SimpleSessionManager sessionManager = new SimpleSessionManager(chatModel);
+        try {
+            // Initialize ChatModel using ConfigurationUtil
+            ConfigurationUtil config = ConfigurationUtil.create();
+            ChatLanguageModel chatModel = config.createChatModel();
+
+            // Create session manager
+            SimpleSessionManager sessionManager = new SimpleSessionManager(chatModel);
 
         // Create sessions for different users
         String session1 = sessionManager.createSession("user_123");
@@ -244,6 +242,11 @@ class SessionExample {
             System.out.println("Session: " + displayId + " " +
                     "User: " + sessionInfo.get("userId") + " " +
                     "Messages: " + sessionInfo.get("totalMessages"));
+        }
+
+        } catch (Exception e) {
+            System.err.println("❌ Error during session management demo: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
