@@ -1,0 +1,11 @@
+# Pydantic AI Dependencies
+# Install with: uv pip install -r requirements.txt
+
+pydantic-ai           # Core framework
+pydantic-ai[openai]   # OpenAI support
+pydantic-ai[anthropic] # Anthropic (Claude) support
+pydantic-ai[groq]     # Groq support
+pydantic-ai[logfire]   # Observability with Logfire
+
+python-dotenv         # Load .env files for API keys
+httpx                 # HTTP client (used by pydantic-ai internally)
